@@ -1,0 +1,137 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum BookingStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  fullName     String   @db.VarChar(150)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  role         UserRole @default(STUDENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacherProfile     Teacher?
+  studentDisciplines StudentDiscipline[]
+  bookings           Booking[]
+
+  @@map("users")
+}
+
+model Teacher {
+  id     Int @id @default(autoincrement())
+  userId Int @unique
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  disciplines TeacherDiscipline[]
+  slots       Slot[]
+
+  @@map("teachers")
+}
+
+model Discipline {
+  id   Int    @id @default(autoincrement())
+  code String @unique @db.VarChar(30)
+  name String @db.VarChar(200)
+
+  teachers TeacherDiscipline[]
+  students StudentDiscipline[]
+  slots    Slot[]
+
+  @@map("disciplines")
+}
+
+model Auditorium {
+  id       Int    @id @default(autoincrement())
+  building String @db.VarChar(100)
+  number   String @db.VarChar(30)
+
+  slots Slot[]
+
+  @@unique([building, number])
+  @@map("auditoriums")
+}
+
+model TeacherDiscipline {
+  teacherId    Int
+  disciplineId Int
+
+  teacher    Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  discipline Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, disciplineId])
+  @@map("teacher_disciplines")
+}
+
+model StudentDiscipline {
+  studentId    Int
+  disciplineId Int
+
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  discipline Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, disciplineId])
+  @@map("student_disciplines")
+}
+
+model Slot {
+  id           Int      @id @default(autoincrement())
+  teacherId    Int
+  disciplineId Int
+  auditoriumId Int
+  startsAt     DateTime @db.Timestamptz(3)
+  endsAt       DateTime @db.Timestamptz(3)
+  isBlocked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  teacher    Teacher    @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  discipline Discipline @relation(fields: [disciplineId], references: [id], onDelete: Restrict)
+  auditorium Auditorium @relation(fields: [auditoriumId], references: [id], onDelete: Restrict)
+  bookings   Booking[]
+
+  @@index([teacherId, startsAt])
+  @@index([disciplineId, startsAt])
+  @@index([startsAt, isBlocked])
+  @@map("slots")
+}
+
+model Booking {
+  id             Int           @id @default(autoincrement())
+  slotId         Int
+  studentId      Int
+  topic          String        @db.VarChar(500)
+  status         BookingStatus @default(BOOKED)
+  teacherComment String?       @db.Text
+  cancelledAt    DateTime?     @db.Timestamptz(3)
+  idempotencyKey String        @unique @db.Uuid
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  slot    Slot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  student User @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([slotId], map: "unique_active_booking_per_slot", where: { status: { not: "CANCELLED" } })
+  @@index([studentId, createdAt])
+  @@index([slotId, createdAt])
+  @@map("bookings")
+}

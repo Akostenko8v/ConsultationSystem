@@ -13,3 +13,8 @@ coverage/
 Thumbs.db
 test-results/
 playwright-report/
+api/.agents/
+api/.claude/
+api/.windsurf/
+api/AGENTS.md
+api/skills-lock.json
