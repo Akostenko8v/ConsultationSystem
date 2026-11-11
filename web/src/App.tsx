@@ -2,6 +2,7 @@
 import AdminPanel from './AdminPanel';
 import { useEffect, useState } from 'react';
 import TeacherPanel from './TeacherPanel';
+import CourseStudentDisciplines from './CourseStudentDisciplines';
 
 type Role = 'STUDENT' | 'TEACHER' | 'ADMIN';
 
@@ -130,6 +131,22 @@ export default function App() {
     const [search, setSearch] = useState('');
     const [notice, setNotice] = useState('');
     const [working, setWorking] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+
+    useEffect(() => {
+        const timer = window.setInterval(() => {
+            setCurrentTime(Date.now());
+        }, 30_000);
+
+        const initialTimer = window.setTimeout(() => {
+            setCurrentTime(Date.now());
+        }, 0);
+
+        return () => {
+            window.clearInterval(timer);
+            window.clearTimeout(initialTimer);
+        };
+    }, []);
 
     async function loadSlots() {
         const result = await request<Slot[]>('/slots');
@@ -639,9 +656,13 @@ export default function App() {
                         )}
 
                         {session?.user.role === 'STUDENT' && (
+                            <CourseStudentDisciplines token={session.access_token} />
+                        )}
+                        {session?.user.role === 'STUDENT' && (
                             <section className="panel">
                                 <span className="eyebrow">ІСТОРІЯ</span>
                                 <h2>Мої записи</h2>
+                                <p className="muted">Скасування можливе не пізніше ніж за 2 години до початку.</p>
 
                                 {bookings.length === 0 ? (
                                     <p className="muted">
@@ -674,8 +695,7 @@ export default function App() {
                                                 </span>
 
                                                 {booking.status === 'BOOKED' &&
-                                                    new Date(booking.slot.startsAt) >
-                                                    new Date() && (
+                                                    new Date(booking.slot.startsAt).getTime() - currentTime >= 2 * 60 * 60 * 1000 && (
                                                         <button
                                                             className="button button-danger"
                                                             disabled={working}

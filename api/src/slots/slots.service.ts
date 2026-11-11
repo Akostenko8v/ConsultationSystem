@@ -62,7 +62,7 @@ export class SlotsService {
             },
             select: slotSelect,
             orderBy: { startsAt: 'asc' },
-            take: 100,
+            take: 1000,
         });
     }
 

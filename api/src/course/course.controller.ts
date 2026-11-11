@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -52,6 +53,28 @@ export class CourseController {
   @Roles('ADMIN')
   report(@Query('from') from: string, @Query('to') to: string) {
     return this.service.report(from, to);
+  }
+
+  @Get('student/disciplines')
+  @Roles('STUDENT')
+  studentDisciplines(@Req() req: AuthenticatedRequest) {
+    return this.service.studentDisciplines(req.user.id);
+  }
+  @Post('student/disciplines/:id')
+  @Roles('STUDENT')
+  enrollDiscipline(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.service.enrollDiscipline(req.user.id, id);
+  }
+  @Delete('student/disciplines/:id')
+  @Roles('STUDENT')
+  removeDiscipline(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.service.removeDiscipline(req.user.id, id);
   }
 
   @Get('admin/stats')

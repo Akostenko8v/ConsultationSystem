@@ -211,6 +211,40 @@ export class CourseService {
     };
   }
 
+  async studentDisciplines(studentId: number) {
+    const [disciplines, links] = await Promise.all([
+      this.prisma.discipline.findMany({
+        select: { id: true, code: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.studentDiscipline.findMany({
+        where: { studentId }, select: { disciplineId: true },
+      }),
+    ]);
+    const enrolled = new Set(links.map((link) => link.disciplineId));
+    return disciplines.map((discipline) => ({
+      ...discipline, enrolled: enrolled.has(discipline.id),
+    }));
+  }
+  async enrollDiscipline(studentId: number, disciplineId: number) {
+    const discipline = await this.prisma.discipline.findUnique({
+      where: { id: disciplineId }, select: { id: true },
+    });
+    if (!discipline) throw new NotFoundException('Discipline not found');
+    await this.prisma.studentDiscipline.upsert({
+      where: { studentId_disciplineId: { studentId, disciplineId } },
+      update: {},
+      create: { studentId, disciplineId },
+    });
+    return { disciplineId, enrolled: true };
+  }
+  async removeDiscipline(studentId: number, disciplineId: number) {
+    await this.prisma.studentDiscipline.deleteMany({
+      where: { studentId, disciplineId },
+    });
+    return { disciplineId, enrolled: false };
+  }
+
   async stats() {
     const [teachers, disciplines, slots, students, bookings, studentDisciplineLinks] =
       await Promise.all([

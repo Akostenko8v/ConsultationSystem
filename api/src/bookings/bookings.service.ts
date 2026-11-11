@@ -247,9 +247,11 @@ export class BookingsService {
                     );
                 }
 
-                if (current.slot.startsAt <= new Date()) {
+                // Explicit cancellation policy: no later than 2 hours before the slot.
+                const cancellationCutoffMs = 2 * 60 * 60 * 1000;
+                if (current.slot.startsAt.getTime() - Date.now() < cancellationCutoffMs) {
                     throw new ConflictException(
-                        'Consultation has already started',
+                        'Booking must be cancelled at least 2 hours before the consultation',
                     );
                 }
 
