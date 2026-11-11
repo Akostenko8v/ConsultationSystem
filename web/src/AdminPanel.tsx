@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import CourseAdminReport from './CourseAdminReport';
 
 type Discipline = {
     id: number;
@@ -22,7 +23,7 @@ type Teacher = {
 };
 
 type Props = { token: string };
-type Section = 'disciplines' | 'auditoriums' | 'teachers';
+type Section = 'disciplines' | 'auditoriums' | 'teachers' | 'report';
 
 const API =
     import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '/api';
@@ -245,6 +246,7 @@ export default function AdminPanel({ token }: Props) {
                     <option value="disciplines">Дисципліни</option>
                     <option value="auditoriums">Аудиторії</option>
                     <option value="teachers">Викладачі</option>
+                    <option value="report">Звіт і статистика БД</option>
                 </select>
             </label>
 
@@ -593,6 +595,7 @@ export default function AdminPanel({ token }: Props) {
                     </div>
                 </>
             )}
+            {section === 'report' && <CourseAdminReport token={token} />}
         </section>
     );
 }

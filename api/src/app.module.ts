@@ -9,6 +9,7 @@ import { DatabaseController } from './database/database.controller.js';
 import { TeachersModule } from './teachers/teachers.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
+import { CourseModule } from './course/course.module.js';
 import { DisciplinesModule } from './disciplines/disciplines.module.js';
 
 @Module({
@@ -20,6 +21,7 @@ import { DisciplinesModule } from './disciplines/disciplines.module.js';
         TeachersModule,
         SlotsModule,
         BookingsModule,
+        CourseModule,
     ],
     controllers: [
         AppController,

@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import CourseTeacherTools from './CourseTeacherTools';
 
 type Teacher = {
     id: number;
@@ -430,6 +431,7 @@ export default function TeacherPanel({ token, userId }: Props) {
                     </article>
                 ))}
             </div>
+            <CourseTeacherTools token={token} disciplines={disciplines} auditoriums={auditoriums} onSlotsChanged={refreshSlots} />
         </section>
     );
 }
