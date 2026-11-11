@@ -88,10 +88,42 @@ const roleNames: Record<Role, string> = {
     ADMIN: 'Адміністратор',
 };
 
+
+const SESSION_KEY = 'consultation-session';
+
+function readSavedSession(): Session | null {
+    try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return null;
+
+        const saved = JSON.parse(raw) as Session;
+
+        if (
+            !saved ||
+            typeof saved.access_token !== 'string' ||
+            !saved.user ||
+            typeof saved.user.id !== 'number' ||
+            typeof saved.user.fullName !== 'string' ||
+            typeof saved.user.email !== 'string' ||
+            !['STUDENT', 'TEACHER', 'ADMIN'].includes(saved.user.role)
+        ) {
+            return null;
+        }
+
+        return saved;
+    } catch {
+        return null;
+    }
+}
+
+
 export default function App() {
-    const [session, setSession] = useState<Session | null>(null);
+    const [session, setSession] = useState<Session | null>(readSavedSession);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+    const [fullName, setFullName] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [slots, setSlots] = useState<Slot[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [topics, setTopics] = useState<Record<number, string>>({});
@@ -159,26 +191,119 @@ export default function App() {
     }, [session]);
 
 
+    useEffect(() => {
+        if (!session) return;
+
+        let active = true;
+
+        fetch(`${API}/auth/me`, {
+            headers: {
+                Authorization: `Bearer ${session.access_token}`,
+            },
+        })
+            .then(async (response) => {
+                if (!active) return;
+
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem(SESSION_KEY);
+                    setSession(null);
+                    setBookings([]);
+                    setNotice('Сесію завершено. Увійдіть повторно.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    setNotice('Не вдалося перевірити сесію. Спробуйте оновити сторінку.');
+                    return;
+                }
+
+                const profile = await response.json() as {
+                    id: number;
+                    role: Role;
+                };
+
+                if (!active) return;
+
+                if (
+                    profile.id !== session.user.id ||
+                    profile.role !== session.user.role
+                ) {
+                    localStorage.removeItem(SESSION_KEY);
+                    setSession(null);
+                    setBookings([]);
+                    setNotice('Дані авторизації змінилися. Увійдіть повторно.');
+                }
+            })
+            .catch(() => {
+                if (active) {
+                    setNotice('Не вдалося перевірити з’єднання із сервером.');
+                }
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [session]);
+
+
+
     async function login(event: React.SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
         setWorking(true);
         setNotice('');
 
+        const registering = authMode === 'register';
+
         try {
+            if (registering) {
+                if (password !== confirmPassword) {
+                    throw new Error('Паролі не збігаються');
+                }
+
+                if (fullName.trim().length < 2) {
+                    throw new Error('Вкажіть повне ім’я');
+                }
+
+                await request('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        fullName: fullName.trim(),
+                        email: email.trim(),
+                        password,
+                    }),
+                });
+            }
+
             const result = await request<Session>('/auth/login', {
                 method: 'POST',
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({
+                    email: email.trim(),
+                    password,
+                }),
             });
 
+            localStorage.setItem(SESSION_KEY, JSON.stringify(result));
             setSession(result);
+
             setPassword('');
-            setNotice('Вхід виконано успішно');
+            setConfirmPassword('');
+            setFullName('');
+            setAuthMode('login');
+
+            setNotice(
+                registering
+                    ? 'Реєстрація успішна! Ви увійшли до системи.'
+                    : 'Вхід виконано успішно',
+            );
         } catch (error) {
-            setNotice(`Помилка входу: ${errorText(error)}`);
+            setNotice(
+                `${registering ? 'Помилка реєстрації' : 'Помилка входу'}: ${errorText(error)}`,
+            );
         } finally {
             setWorking(false);
         }
     }
+
 
     async function book(slotId: number) {
         if (!session) return;
@@ -265,6 +390,7 @@ export default function App() {
                             <button
                                 className="button button-outline"
                                 onClick={() => {
+                                    localStorage.removeItem(SESSION_KEY);
                                     setSession(null);
                                     setBookings([]);
                                     setNotice('');
@@ -390,23 +516,47 @@ export default function App() {
 
                     <aside className="sidebar">
                         {!session ? (
+
                             <section className="panel">
                                 <span className="eyebrow">ОСОБИСТИЙ КАБІНЕТ</span>
-                                <h2>Вхід до системи</h2>
+
+                                <h2>
+                                    {authMode === 'register'
+                                        ? 'Реєстрація студента'
+                                        : 'Вхід до системи'}
+                                </h2>
+
                                 <p className="muted">
-                                    Увійдіть, щоб записатися на консультацію.
+                                    {authMode === 'register'
+                                        ? 'Створіть акаунт для запису на консультації.'
+                                        : 'Увійдіть, щоб записатися на консультацію.'}
                                 </p>
 
                                 <form className="form" onSubmit={login}>
+                                    {authMode === 'register' && (
+                                        <label>
+                                            Повне ім’я
+                                            <input
+                                                className="field"
+                                                type="text"
+                                                value={fullName}
+                                                onChange={(event) => setFullName(event.target.value)}
+                                                minLength={2}
+                                                maxLength={150}
+                                                autoComplete="name"
+                                                required
+                                            />
+                                        </label>
+                                    )}
+
                                     <label>
                                         Електронна пошта
                                         <input
                                             className="field"
                                             type="email"
                                             value={email}
-                                            onChange={(event) =>
-                                                setEmail(event.target.value)
-                                            }
+                                            onChange={(event) => setEmail(event.target.value)}
+                                            autoComplete="email"
                                             required
                                         />
                                     </label>
@@ -417,22 +567,66 @@ export default function App() {
                                             className="field"
                                             type="password"
                                             value={password}
-                                            onChange={(event) =>
-                                                setPassword(event.target.value)
+                                            onChange={(event) => setPassword(event.target.value)}
+                                            minLength={authMode === 'register' ? 8 : undefined}
+                                            maxLength={72}
+                                            autoComplete={
+                                                authMode === 'register'
+                                                    ? 'new-password'
+                                                    : 'current-password'
                                             }
                                             required
                                         />
                                     </label>
 
+                                    {authMode === 'register' && (
+                                        <label>
+                                            Підтвердження пароля
+                                            <input
+                                                className="field"
+                                                type="password"
+                                                value={confirmPassword}
+                                                onChange={(event) => setConfirmPassword(event.target.value)}
+                                                minLength={8}
+                                                maxLength={72}
+                                                autoComplete="new-password"
+                                                required
+                                            />
+                                        </label>
+                                    )}
+
                                     <button
                                         className="button button-primary full"
-                                        disabled={working}
                                         type="submit"
+                                        disabled={working}
                                     >
-                                        {working ? 'Зачекайте...' : 'Увійти'}
+                                        {working
+                                            ? 'Зачекайте...'
+                                            : authMode === 'register'
+                                                ? 'Зареєструватися'
+                                                : 'Увійти'}
+                                    </button>
+
+                                    <button
+                                        className="button button-outline full"
+                                        type="button"
+                                        disabled={working}
+                                        onClick={() => {
+                                            setAuthMode((previous) =>
+                                                previous === 'login' ? 'register' : 'login',
+                                            );
+                                            setPassword('');
+                                            setConfirmPassword('');
+                                            setNotice('');
+                                        }}
+                                    >
+                                        {authMode === 'register'
+                                            ? 'Вже є акаунт? Увійти'
+                                            : 'Немає акаунта? Зареєструватися'}
                                     </button>
                                 </form>
                             </section>
+
                         ) : (
                             <section className="panel">
                                 <span className="eyebrow">МІЙ ПРОФІЛЬ</span>
